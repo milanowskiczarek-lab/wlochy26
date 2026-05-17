@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Moje Włochy — interaktywna mapa wyjazdów</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --emerald: #10b981;
+      --emerald-dark: #065f46;
+      --line: #e2e8f0;
+      --shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
+      --radius: 28px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background: linear-gradient(135deg, #e0f2fe 0%, #ffffff 48%, #dcfce7 100%);
+      min-height: 100vh;
+    }
+    .wrap { max-width: 1400px; margin: 0 auto; padding: 28px; }
+    header {
+      display: flex; justify-content: space-between; gap: 18px; align-items: end;
+      margin-bottom: 22px;
+    }
+    .badge {
+      display: inline-flex; gap: 8px; align-items: center;
+      background: #d1fae5; color: #065f46; border-radius: 999px;
+      padding: 7px 12px; font-weight: 700; font-size: 14px;
+    }
+    h1 { margin: 10px 0 8px; font-size: clamp(34px, 5vw, 60px); letter-spacing: -0.04em; }
+    p { color: var(--muted); line-height: 1.55; }
+    .grid { display: grid; grid-template-columns: 1.35fr 0.65fr; gap: 20px; }
+    .card {
+      background: rgba(255,255,255,.92); border: 1px solid rgba(226,232,240,.85);
+      border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden;
+    }
+    .card-pad { padding: 22px; }
+    .topbar {
+      display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    h2 { margin: 0 0 5px; font-size: 22px; }
+    h3 { margin: 0 0 12px; }
+    button, input, select, textarea {
+      font: inherit;
+    }
+    .btn {
+      appearance: none; border: 1px solid var(--line); background: white; color: var(--text);
+      border-radius: 16px; padding: 11px 14px; cursor: pointer; font-weight: 700;
+      transition: transform .12s ease, background .12s ease, box-shadow .12s ease;
+    }
+    .btn:hover { background: #f8fafc; transform: translateY(-1px); }
+    .btn.primary { background: #0f172a; color: white; border-color: #0f172a; width: 100%; padding: 15px; }
+    .btn.primary:hover { background: #1e293b; }
+    .map-layout { display: grid; grid-template-columns: 1fr 300px; gap: 18px; }
+    .map-box {
+      position: relative; background: linear-gradient(#bae6fd, #eff6ff);
+      border-radius: 28px; padding: 12px; min-height: 660px; overflow: auto;
+      box-shadow: inset 0 0 0 1px rgba(148,163,184,.25);
+    }
+    .sea-label {
+      position: absolute; top: 16px; left: 16px; z-index: 2;
+      background: rgba(255,255,255,.82); backdrop-filter: blur(8px);
+      border-radius: 16px; padding: 8px 11px; font-size: 12px; font-weight: 800; color: #475569;
+    }
+    svg { display: block; margin: 0 auto; width: 100%; max-width: 720px; height: 720px; }
+    .region { cursor: pointer; stroke: white; stroke-width: 1.8; filter: drop-shadow(0 3px 3px rgba(15,23,42,.16)); }
+    .region:hover { brightness: 1.05; transform-origin: center; }
+    .region.visited { stroke: #064e3b; stroke-width: 3.2; }
+    .region.selected { stroke: #0f172a; stroke-width: 3.8; }
+    .region-label, .city-label {
+      pointer-events: none; user-select: none; paint-order: stroke; stroke: white; stroke-linejoin: round;
+      font-weight: 800;
+    }
+    .region-label { fill: #1e293b; font-size: 4.8px; stroke-width: 2.3px; }
+    .city-label { fill: #334155; font-size: 4.4px; stroke-width: 2.5px; }
+    .city-label.visited { fill: #020617; }
+    .place { cursor: pointer; }
+    .side-card { background: #f8fafc; border: 1px solid #edf2f7; border-radius: 24px; padding: 18px; margin-bottom: 14px; }
+    .progress-row { display: flex; align-items: center; gap: 18px; }
+    .ring { width: 112px; height: 112px; position: relative; }
+    .ring svg { height: 112px; width: 112px; transform: rotate(-90deg); }
+    .ring-center {
+      position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    .ring-center strong { font-size: 26px; }
+    .ring-center span { color: var(--muted); font-size: 11px; text-transform: uppercase; font-weight: 800; }
+    .region-list button {
+      width: 100%; display: flex; justify-content: space-between; align-items: center;
+      padding: 9px 11px; background: white; border: 1px solid #e2e8f0; border-radius: 14px; margin: 7px 0; cursor: pointer;
+    }
+    .legend { display: grid; gap: 8px; color: #475569; font-size: 13px; }
+    .legend div { background: white; border-radius: 15px; padding: 10px; }
+    .dot { display: inline-block; width: 12px; height: 12px; border-radius: 999px; margin-right: 8px; vertical-align: -1px; }
+    .panel { display: grid; gap: 18px; }
+    .field { width: 100%; border: 1px solid var(--line); border-radius: 16px; padding: 12px 13px; background: white; outline: none; }
+    .field:focus { box-shadow: 0 0 0 4px #bbf7d0; border-color: #86efac; }
+    textarea.field { min-height: 92px; resize: vertical; }
+    .form-stack { display: grid; gap: 10px; }
+    .search-wrap { position: relative; margin: 12px 0; }
+    .search-wrap input { padding-left: 38px; }
+    .search-wrap span { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: #94a3b8; }
+    .place-list { display: grid; gap: 10px; max-height: 520px; overflow: auto; padding-right: 4px; }
+    .place-row {
+      display: flex; gap: 10px; justify-content: space-between; align-items: flex-start;
+      border: 1px solid var(--line); border-radius: 18px; padding: 12px; background: white;
+    }
+    .place-row.visited { background: #ecfdf5; border-color: #a7f3d0; }
+    .place-main { display: flex; gap: 10px; flex: 1; min-width: 0; cursor: pointer; }
+    .pin {
+      display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+      width: 28px; height: 28px; border-radius: 999px; background: #f1f5f9; color: #64748b;
+    }
+    .visited .pin { background: var(--emerald); color: white; }
+    .place-title { font-weight: 850; }
+    .place-meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
+    .place-note { color: #475569; font-size: 13px; margin-top: 5px; }
+    .delete {
+      border: 0; background: transparent; color: #94a3b8; cursor: pointer; border-radius: 12px; padding: 6px;
+    }
+    .delete:hover { background: white; color: #ef4444; }
+    .counter { border-radius: 999px; background: #d1fae5; color: #065f46; padding: 5px 10px; font-size: 13px; font-weight: 850; }
+    @media (max-width: 1100px) {
+      .grid, .map-layout { grid-template-columns: 1fr; }
+      header { align-items: flex-start; flex-direction: column; }
+      .map-box { min-height: auto; }
+      svg { height: auto; }
+    }
+    @media (max-width: 640px) {
+      .wrap { padding: 14px; }
+      .card-pad { padding: 16px; }
+      .topbar { align-items: flex-start; }
+      .btn { padding: 10px 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <div class="badge">✈️ Interaktywna mapa wyjazdów</div>
+        <h1>Moje Włochy</h1>
+        <p>Kolorowa mapa regionów z najważniejszymi miastami. Klikaj regiony albo punkty miejscowości, które odwiedziłeś.</p>
+      </div>
+      <button class="btn" id="resetBtn">↻ Wyczyść mapę</button>
+    </header>
+
+    <section class="grid">
+      <div class="card">
+        <div class="card-pad">
+          <div class="topbar">
+            <div>
+              <h2>Kolorowa mapa regionów i miast</h2>
+              <p style="margin:0">Czarne punkty oznaczają odwiedzone miejscowości. Region z grubą ramką jest odwiedzony.</p>
+            </div>
+            <div>
+              <button class="btn" id="toggleCities">Ukryj miasta</button>
+              <button class="btn" id="toggleRegions">Ukryj regiony</button>
+            </div>
+          </div>
+
+          <div class="map-layout">
+            <div class="map-box">
+              <div class="sea-label">Morze Liguryjskie / Tyrreńskie / Adriatyk</div>
+              <svg id="map" viewBox="0 0 190 305" role="img" aria-label="Kolorowa mapa regionów Włoch z miejscowościami">
+                <defs>
+                  <pattern id="visitedPattern" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                    <line x1="0" y1="0" x2="0" y2="6" stroke="#065f46" stroke-width="1.2" opacity="0.55" />
+                  </pattern>
+                </defs>
+                <path d="M43 8 C56 0 73 -2 91 9 C111 21 119 39 114 60" fill="none" stroke="#64748b" stroke-width="1.2" stroke-dasharray="3 4" opacity="0.45"></path>
+                <text x="70" y="8" fill="#64748b" font-size="5" font-weight="800">ALPY</text>
+                <path d="M54 49 C74 62 85 83 94 107 C102 128 117 143 133 160 C145 174 142 201 129 234" fill="none" stroke="#64748b" stroke-width="1.1" stroke-dasharray="2 4" opacity="0.45"></path>
+                <text x="101" y="136" fill="#64748b" font-size="5" font-weight="800" transform="rotate(55 101 136)">APENINY</text>
+                <g id="regionsLayer"></g>
+                <g id="regionLabelsLayer"></g>
+                <g id="placesLayer"></g>
+              </svg>
+            </div>
+
+            <aside>
+              <div class="side-card progress-row">
+                <div class="ring">
+                  <svg viewBox="0 0 112 112">
+                    <circle cx="56" cy="56" r="44" fill="none" stroke="#e2e8f0" stroke-width="10"></circle>
+                    <circle id="progressCircle" cx="56" cy="56" r="44" fill="none" stroke="#10b981" stroke-width="10" stroke-linecap="round" stroke-dasharray="276.46" stroke-dashoffset="276.46"></circle>
+                  </svg>
+                  <div class="ring-center"><strong id="percentText">0%</strong><span>Włoch</span></div>
+                </div>
+                <div>
+                  <p style="margin:0;color:#64748b">Odwiedzone regiony</p>
+                  <div style="font-size:34px;font-weight:900" id="regionCount">0/20</div>
+                  <p style="margin:0;color:#64748b" id="placeCount">Miejsca: 0/0</p>
+                </div>
+              </div>
+
+              <div class="side-card">
+                <div style="background:#f1f5f9;border-radius:16px;padding:12px;margin-bottom:12px;color:#475569">
+                  Aktywny region: <strong id="selectedRegionName" style="color:#0f172a">Kliknij region</strong>
+                </div>
+                <div id="selectedRegionPlaces" class="region-list">
+                  <p>Kliknij region na mapie, aby zobaczyć przypisane miejscowości.</p>
+                </div>
+              </div>
+
+              <div class="legend">
+                <div><span class="dot" style="background:white;border:1px solid #334155"></span>Ważna miejscowość</div>
+                <div><span class="dot" style="background:#020617"></span>Miejscowość odwiedzona</div>
+                <div><span class="dot" style="background:#d1fae5;border:2px solid #065f46"></span>Region odwiedzony</div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="card">
+          <div class="card-pad">
+            <h2>Dodaj własne miejsce</h2>
+            <div class="form-stack">
+              <input id="newName" class="field" placeholder="np. Orvieto, Amalfi, Sirmione..." />
+              <select id="newRegion" class="field"></select>
+              <input id="newDate" class="field" placeholder="Data / rok wyjazdu, np. maj 2024" />
+              <textarea id="newNote" class="field" placeholder="Notatka, wspomnienie, ulubione jedzenie albo plan powrotu"></textarea>
+              <button class="btn primary" id="addBtn">+ Dodaj jako odwiedzone</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-pad">
+            <div class="topbar">
+              <h2>Lista miejscowości</h2>
+              <span class="counter" id="visitedCounter">0 odwiedzone</span>
+            </div>
+            <div class="search-wrap">
+              <span>⌕</span>
+              <input id="search" class="field" placeholder="Szukaj miejscowości lub regionu" />
+            </div>
+            <div id="placeList" class="place-list"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+<script>
+const STORAGE_KEY = "italy-travel-map-share-v1";
+const regions = [
+  { id: "valle-daosta", name: "Valle d'Aosta", short: "VDA", x: 32, y: 13, color: "#fde68a", d: "M29 10 L36 9 L40 15 L36 21 L28 20 L25 15 Z" },
+  { id: "piemonte", name: "Piemont", short: "Piemont", x: 35, y: 24, color: "#bfdbfe", d: "M27 20 L41 18 L50 27 L47 39 L35 42 L24 34 Z" },
+  { id: "liguria", name: "Liguria", short: "Liguria", x: 44, y: 44, color: "#99f6e4", d: "M34 43 L50 39 L64 46 L60 53 L44 51 Z" },
+  { id: "lombardia", name: "Lombardia", short: "Lombardia", x: 56, y: 22, color: "#fecaca", d: "M43 13 L62 11 L72 21 L68 35 L50 36 L48 27 Z" },
+  { id: "trentino", name: "Trydent-Górna Adyga", short: "Trydent", x: 69, y: 10, color: "#ddd6fe", d: "M62 3 L78 2 L84 12 L76 23 L66 18 Z" },
+  { id: "veneto", name: "Wenecja Euganejska", short: "Veneto", x: 80, y: 27, color: "#fed7aa", d: "M70 18 L88 15 L99 28 L91 40 L70 36 Z" },
+  { id: "friuli", name: "Friuli-Wenecja Julijska", short: "Friuli", x: 99, y: 22, color: "#bbf7d0", d: "M89 15 L105 13 L114 23 L106 31 L98 28 Z" },
+  { id: "emilia", name: "Emilia-Romania", short: "Emilia-Rom.", x: 68, y: 47, color: "#fbcfe8", d: "M50 39 L72 36 L93 43 L92 53 L69 56 L56 51 Z" },
+  { id: "toscana", name: "Toskania", short: "Toskania", x: 63, y: 64, color: "#bef264", d: "M52 54 L72 55 L83 68 L77 84 L58 82 L48 69 Z" },
+  { id: "umbria", name: "Umbria", short: "Umbria", x: 82, y: 76, color: "#c4b5fd", d: "M78 66 L92 69 L96 84 L86 94 L76 84 Z" },
+  { id: "marche", name: "Marche", short: "Marche", x: 98, y: 72, color: "#a7f3d0", d: "M92 58 L107 64 L111 80 L98 87 L93 76 Z" },
+  { id: "lazio", name: "Lacjum", short: "Lacjum", x: 82, y: 100, color: "#fda4af", d: "M70 86 L88 91 L99 108 L92 124 L75 119 L66 102 Z" },
+  { id: "abruzzo", name: "Abruzja", short: "Abruzja", x: 105, y: 100, color: "#93c5fd", d: "M96 84 L112 84 L122 99 L114 114 L99 110 L92 96 Z" },
+  { id: "molise", name: "Molise", short: "Molise", x: 113, y: 124, color: "#fde68a", d: "M105 113 L119 112 L126 125 L119 136 L106 130 Z" },
+  { id: "campania", name: "Kampania", short: "Kampania", x: 101, y: 148, color: "#fdba74", d: "M86 123 L105 132 L117 151 L110 170 L92 163 L82 143 Z" },
+  { id: "puglia", name: "Apulia", short: "Apulia", x: 135, y: 147, color: "#86efac", d: "M121 123 L139 133 L163 158 L172 181 L162 187 L140 164 L122 145 Z" },
+  { id: "basilicata", name: "Basilicata", short: "Basilicata", x: 121, y: 169, color: "#f0abfc", d: "M112 151 L132 153 L145 171 L136 188 L115 181 Z" },
+  { id: "calabria", name: "Kalabria", short: "Kalabria", x: 127, y: 210, color: "#67e8f9", d: "M121 184 L139 191 L145 212 L136 238 L121 249 L112 232 L121 212 Z" },
+  { id: "sicilia", name: "Sycylia", short: "Sycylia", x: 94, y: 270, color: "#f9a8d4", d: "M54 264 L93 248 L132 260 L147 279 L113 292 L68 286 Z" },
+  { id: "sardegna", name: "Sardynia", short: "Sardynia", x: 33, y: 182, color: "#c084fc", d: "M25 143 L45 151 L52 184 L42 224 L22 217 L16 181 Z" }
+];
+
+const initialPlaces = [
+  ["turin","Turyn","piemonte",35,31],["aosta","Aosta","valle-daosta",31,15],["milan","Mediolan","lombardia",55,28],
+  ["bergamo","Bergamo","lombardia",63,26],["como","Como","lombardia",56,18],["genoa","Genua","liguria",50,47],
+  ["trento","Trydent","trentino",72,16],["bolzano","Bolzano","trentino",73,9],["verona","Werona","veneto",78,31],
+  ["venice","Wenecja","veneto",92,34],["padua","Padwa","veneto",86,37],["trieste","Triest","friuli",108,28],
+  ["bologna","Bolonia","emilia",72,48],["parma","Parma","emilia",61,44],["rimini","Rimini","emilia",91,53],
+  ["florence","Florencja","toscana",66,72],["pisa","Piza","toscana",55,70],["siena","Siena","toscana",67,81],
+  ["perugia","Perugia","umbria",83,81],["assisi","Asyż","umbria",87,83],["ancona","Ankona","marche",105,73],
+  ["rome","Rzym","lazio",80,111],["tivoli","Tivoli","lazio",87,107],["pescara","Pescara","abruzzo",113,98],
+  ["laquila","L'Aquila","abruzzo",104,99],["campobasso","Campobasso","molise",115,126],["naples","Neapol","campania",99,151],
+  ["salerno","Salerno","campania",107,162],["pompeii","Pompeje","campania",102,156],["bari","Bari","puglia",139,146],
+  ["alberobello","Alberobello","puglia",148,160],["lecce","Lecce","puglia",164,180],["matera","Matera","basilicata",130,169],
+  ["potenza","Potenza","basilicata",121,174],["tropea","Tropea","calabria",124,218],["reggio","Reggio Calabria","calabria",126,243],
+  ["palermo","Palermo","sicilia",81,260],["cefalu","Cefalù","sicilia",96,257],["catania","Katania","sicilia",126,271],
+  ["syracuse","Syrakuzy","sicilia",137,281],["cagliari","Cagliari","sardegna",37,213],["olbia","Olbia","sardegna",46,166],
+  ["alghero","Alghero","sardegna",28,169]
+].map(([id, name, regionId, x, y]) => ({ id, name, regionId, x, y, visited: false, note: "", date: "" }));
+
+let state = loadState() || {
+  visitedRegions: [],
+  places: initialPlaces,
+  selectedRegion: null,
+  showCityNames: true,
+  showRegionNames: true,
+  query: ""
+};
+
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; }
+}
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+function regionById(id) { return regions.find(r => r.id === id); }
+function placeById(id) { return state.places.find(p => p.id === id); }
+function escapeHtml(str = "") {
+  return String(str).replace(/[&<>"']/g, s => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[s]));
+}
+
+function toggleRegion(regionId) {
+  if (state.visitedRegions.includes(regionId)) {
+    state.visitedRegions = state.visitedRegions.filter(id => id !== regionId);
+  } else {
+    state.visitedRegions.push(regionId);
+  }
+  state.selectedRegion = regionId;
+  saveState();
+  render();
+}
+
+function togglePlace(placeId) {
+  const place = placeById(placeId);
+  if (!place) return;
+  place.visited = !place.visited;
+  if (place.visited && !state.visitedRegions.includes(place.regionId)) state.visitedRegions.push(place.regionId);
+  saveState();
+  render();
+}
+
+function deletePlace(placeId) {
+  state.places = state.places.filter(p => p.id !== placeId);
+  saveState();
+  render();
+}
+
+function addPlace() {
+  const name = document.getElementById("newName").value.trim();
+  const regionId = document.getElementById("newRegion").value;
+  const date = document.getElementById("newDate").value.trim();
+  const note = document.getElementById("newNote").value.trim();
+  if (!name) return;
+  const region = regionById(regionId);
+  const already = state.places.filter(p => p.regionId === regionId).length;
+  const id = name.toLowerCase().replace(/[^a-z0-9ąćęłńóśźż]+/gi, "-") + "-" + Date.now();
+  state.places.push({
+    id, name, regionId, date, note, visited: true,
+    x: Math.min(174, Math.max(16, (region?.x || 80) + ((already % 5) - 2) * 4)),
+    y: Math.min(292, Math.max(8, (region?.y || 110) + (Math.floor(already / 5) - 1) * 5))
+  });
+  if (!state.visitedRegions.includes(regionId)) state.visitedRegions.push(regionId);
+  document.getElementById("newName").value = "";
+  document.getElementById("newDate").value = "";
+  document.getElementById("newNote").value = "";
+  saveState();
+  render();
+}
+
+function resetAll() {
+  if (!confirm("Wyczyścić zaznaczone regiony i miejsca?")) return;
+  state = {
+    visitedRegions: [],
+    places: initialPlaces.map(p => ({ ...p })),
+    selectedRegion: null,
+    showCityNames: true,
+    showRegionNames: true,
+    query: ""
+  };
+  localStorage.removeItem(STORAGE_KEY);
+  render();
+}
+
+function renderMap() {
+  const regionsLayer = document.getElementById("regionsLayer");
+  const labelsLayer = document.getElementById("regionLabelsLayer");
+  const placesLayer = document.getElementById("placesLayer");
+  regionsLayer.innerHTML = "";
+  labelsLayer.innerHTML = "";
+  placesLayer.innerHTML = "";
+
+  regions.forEach(region => {
+    const visited = state.visitedRegions.includes(region.id);
+    const selected = state.selectedRegion === region.id;
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", region.d);
+    path.setAttribute("fill", region.color);
+    path.setAttribute("class", `region ${visited ? "visited" : ""} ${selected ? "selected" : ""}`);
+    path.addEventListener("click", () => toggleRegion(region.id));
+    const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    title.textContent = region.name;
+    path.appendChild(title);
+    g.appendChild(path);
+
+    if (visited) {
+      const overlay = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      overlay.setAttribute("d", region.d);
+      overlay.setAttribute("fill", "url(#visitedPattern)");
+      overlay.setAttribute("opacity", "0.30");
+      overlay.setAttribute("pointer-events", "none");
+      g.appendChild(overlay);
+    }
+    regionsLayer.appendChild(g);
+
+    if (state.showRegionNames) {
+      const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      text.setAttribute("x", region.x);
+      text.setAttribute("y", region.y);
+      text.setAttribute("text-anchor", "middle");
+      text.setAttribute("class", "region-label");
+      text.textContent = region.short;
+      labelsLayer.appendChild(text);
+    }
+  });
+
+  state.places.forEach(place => {
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.setAttribute("class", "place");
+    g.addEventListener("click", () => togglePlace(place.id));
+
+    if (place.visited) {
+      const halo = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      halo.setAttribute("cx", place.x); halo.setAttribute("cy", place.y); halo.setAttribute("r", "7");
+      halo.setAttribute("fill", "rgba(16,185,129,.2)"); halo.setAttribute("stroke", "#047857"); halo.setAttribute("stroke-width", "0.8");
+      g.appendChild(halo);
+    }
+
+    const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    dot.setAttribute("cx", place.x); dot.setAttribute("cy", place.y); dot.setAttribute("r", place.visited ? "4.4" : "3.3");
+    dot.setAttribute("fill", place.visited ? "#020617" : "#fff");
+    dot.setAttribute("stroke", place.visited ? "#fff" : "#334155");
+    dot.setAttribute("stroke-width", "1.1");
+    g.appendChild(dot);
+
+    if (state.showCityNames) {
+      const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      text.setAttribute("x", place.x + 5);
+      text.setAttribute("y", place.y - 3);
+      text.setAttribute("class", `city-label ${place.visited ? "visited" : ""}`);
+      text.textContent = place.name;
+      g.appendChild(text);
+    }
+
+    const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    title.textContent = place.name;
+    g.appendChild(title);
+    placesLayer.appendChild(g);
+  });
+}
+
+function renderStats() {
+  const percent = Math.round((state.visitedRegions.length / regions.length) * 100);
+  const circumference = 2 * Math.PI * 44;
+  const offset = circumference - (percent / 100) * circumference;
+  document.getElementById("progressCircle").style.strokeDashoffset = offset;
+  document.getElementById("percentText").textContent = percent + "%";
+  document.getElementById("regionCount").textContent = `${state.visitedRegions.length}/20`;
+  document.getElementById("placeCount").textContent = `Miejsca: ${state.places.filter(p => p.visited).length}/${state.places.length}`;
+  document.getElementById("visitedCounter").textContent = `${state.places.filter(p => p.visited).length} odwiedzone`;
+}
+
+function renderSelectedRegion() {
+  const nameEl = document.getElementById("selectedRegionName");
+  const box = document.getElementById("selectedRegionPlaces");
+  if (!state.selectedRegion) {
+    nameEl.textContent = "Kliknij region";
+    box.innerHTML = "<p>Kliknij region na mapie, aby zobaczyć przypisane miejscowości.</p>";
+    return;
+  }
+  const region = regionById(state.selectedRegion);
+  nameEl.textContent = region?.name || "Region";
+  const items = state.places.filter(p => p.regionId === state.selectedRegion);
+  if (!items.length) {
+    box.innerHTML = "<p>Nie ma jeszcze dodanych miejsc w tym regionie.</p>";
+    return;
+  }
+  box.innerHTML = items.map(p => `
+    <button onclick="togglePlace('${p.id}')">
+      <span>${escapeHtml(p.name)}</span>
+      <span>${p.visited ? "✓" : "○"}</span>
+    </button>
+  `).join("");
+}
+
+function renderPlaceList() {
+  const q = (state.query || "").toLowerCase();
+  const list = document.getElementById("placeList");
+  const filtered = state.places.filter(place => {
+    const region = regionById(place.regionId)?.name || "";
+    return `${place.name} ${region} ${place.note}`.toLowerCase().includes(q);
+  });
+
+  if (!filtered.length) {
+    list.innerHTML = `<p style="background:#f8fafc;border-radius:16px;padding:14px;color:#64748b">Brak wyników. Dodaj nowe miejsce albo zmień wyszukiwanie.</p>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(place => {
+    const region = regionById(place.regionId);
+    return `
+      <div class="place-row ${place.visited ? "visited" : ""}">
+        <div class="place-main" onclick="togglePlace('${place.id}')">
+          <span class="pin">⌖</span>
+          <div>
+            <div class="place-title">${escapeHtml(place.name)}</div>
+            <div class="place-meta">${escapeHtml(region?.name || "")}${place.date ? " • " + escapeHtml(place.date) : ""}</div>
+            ${place.note ? `<div class="place-note">${escapeHtml(place.note)}</div>` : ""}
+          </div>
+        </div>
+        <button class="delete" onclick="deletePlace('${place.id}')" title="Usuń">🗑</button>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderControls() {
+  document.getElementById("toggleCities").textContent = state.showCityNames ? "Ukryj miasta" : "Pokaż miasta";
+  document.getElementById("toggleRegions").textContent = state.showRegionNames ? "Ukryj regiony" : "Pokaż regiony";
+  document.getElementById("search").value = state.query || "";
+}
+
+function render() {
+  renderMap();
+  renderStats();
+  renderSelectedRegion();
+  renderPlaceList();
+  renderControls();
+}
+
+document.getElementById("newRegion").innerHTML = regions.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join("");
+document.getElementById("addBtn").addEventListener("click", addPlace);
+document.getElementById("resetBtn").addEventListener("click", resetAll);
+document.getElementById("toggleCities").addEventListener("click", () => { state.showCityNames = !state.showCityNames; saveState(); render(); });
+document.getElementById("toggleRegions").addEventListener("click", () => { state.showRegionNames = !state.showRegionNames; saveState(); render(); });
+document.getElementById("search").addEventListener("input", e => { state.query = e.target.value; saveState(); renderPlaceList(); });
+
+window.togglePlace = togglePlace;
+window.deletePlace = deletePlace;
+
+render();
+</script>
+</body>
+</html>
